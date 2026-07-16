@@ -4,12 +4,14 @@ import { Search, RefreshCw } from 'lucide-react'
 import { api } from '../api/client'
 import ActionDot from '../components/ActionDot'
 import StatusHeaderFilter from '../components/StatusHeaderFilter'
+import Pagination from '../components/Pagination'
 
 export default function Listings() {
   const navigate = useNavigate()
   const [data, setData] = useState({ items: [], total: 0, pages: 0 })
   const [page, setPage] = useState(1)
   const [q, setQ] = useState('')
+  const [appliedQ, setAppliedQ] = useState('')
   const [selectedStatuses, setSelectedStatuses] = useState([])
   const [marketplace, setMarketplace] = useState('')
   const [action, setAction] = useState('')
@@ -38,7 +40,7 @@ export default function Listings() {
         params: {
           page,
           page_size: 30,
-          q: q || undefined,
+          q: appliedQ || undefined,
           status: selectedStatuses.length ? selectedStatuses : undefined,
           marketplace: marketplace || undefined,
           action: action || undefined,
@@ -53,8 +55,18 @@ export default function Listings() {
     }
   }
 
+  const applySearch = () => {
+    setPage(1)
+    setAppliedQ(q.trim())
+  }
+
+  const resetToFirst = (updater) => {
+    setPage(1)
+    updater()
+  }
+
   useEffect(() => { loadMeta() }, [])
-  useEffect(() => { load() }, [page, selectedStatuses, marketplace, action])
+  useEffect(() => { load() }, [page, appliedQ, selectedStatuses, marketplace, action])
 
   return (
     <>
@@ -64,7 +76,8 @@ export default function Listings() {
           <p>{data.total.toLocaleString()} bản ghi marketplace đã đồng bộ</p>
         </div>
         <button onClick={() => { loadMeta(); load() }}>
-          <RefreshCw size={16}/>{loading ? 'Đang tải' : 'Làm mới'}
+          <RefreshCw size={16}/>
+          {loading ? 'Đang tải' : 'Làm mới'}
         </button>
       </header>
 
@@ -74,17 +87,23 @@ export default function Listings() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (setPage(1), load())}
+            onKeyDown={(e) => e.key === 'Enter' && applySearch()}
             placeholder="Listing ID, tiêu đề, thương hiệu..."
           />
         </div>
-        <select value={marketplace} onChange={(e) => (setMarketplace(e.target.value), setPage(1))}>
+        <select
+          value={marketplace}
+          onChange={(e) => resetToFirst(() => setMarketplace(e.target.value))}
+        >
           <option value="">Tất cả marketplace</option>
           {marketplaces.map((item) => (
             <option key={item} value={item}>{item}</option>
           ))}
         </select>
-        <select value={action} onChange={(e) => (setAction(e.target.value), setPage(1))}>
+        <select
+          value={action}
+          onChange={(e) => resetToFirst(() => setAction(e.target.value))}
+        >
           <option value="">Tất cả thay đổi</option>
           <option value="INSERT">Thêm mới</option>
           <option value="UPDATE">Cập nhật</option>
@@ -106,7 +125,7 @@ export default function Listings() {
                   <StatusHeaderFilter
                     options={statuses}
                     value={selectedStatuses}
-                    onChange={(next) => { setSelectedStatuses(next); setPage(1) }}
+                    onChange={(next) => resetToFirst(() => setSelectedStatuses(next))}
                   />
                 </th>
                 <th>Seller</th>
@@ -131,12 +150,19 @@ export default function Listings() {
                       </span>
                     </div>
                   </td>
-                  <td>{item.total_price ? `${Number(item.total_price).toLocaleString()} ${item.currency || ''}` : '-'}</td>
+                  <td>
+                    {item.total_price
+                      ? `${Number(item.total_price).toLocaleString()} ${item.currency || ''}`
+                      : '-'}
+                  </td>
                   <td><span className="status-pill">{item.listing_status || '-'}</span></td>
                   <td>{item.seller_or_shop || '-'}</td>
                   <td>
                     {item.last_seen_at
-                      ? new Date(item.last_seen_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })
+                      ? new Date(item.last_seen_at).toLocaleString('vi-VN', {
+                        timeZone: 'Asia/Ho_Chi_Minh',
+                        hour12: false,
+                      })
                       : '-'}
                   </td>
                 </tr>
@@ -146,11 +172,7 @@ export default function Listings() {
         </div>
       </div>
 
-      <div className="pagination">
-        <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Trước</button>
-        <span>Trang {page}/{data.pages || 1}</span>
-        <button disabled={page >= data.pages} onClick={() => setPage(page + 1)}>Sau</button>
-      </div>
+      <Pagination page={page} pages={data.pages || 1} onChange={setPage} />
     </>
   )
 }

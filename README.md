@@ -1,4 +1,4 @@
-# BHQ Sheet Sync — React + FastAPI + PostgreSQL
+# HQa Sheet Sync — React + FastAPI + PostgreSQL
 
 Source chạy local, không Docker. Hệ thống kết nối Google Sheet bằng OAuth 2.0, đồng bộ listing đa marketplace lúc 08:30 (GMT+7) mỗi ngày, phân loại INSERT / UPDATE / SKIP, lưu dữ liệu chủ chốt ở bảng current và payload đầy đủ ở bảng JSONB detail. Marketplace lấy từ cột `marketplace` trong Sheet.
 
@@ -98,3 +98,18 @@ Vào **Cấu hình** → **Kết nối Google** → cấp quyền Sheets. Sau kh
 ## Lưu ý production
 
 Bản source sử dụng loop query để dễ đọc và chạy ổn ở 10.000 dòng/ngày. Khi dữ liệu tăng mạnh, thay phần import bằng PostgreSQL `COPY` vào staging table rồi `INSERT ... ON CONFLICT ... WHERE data_hash IS DISTINCT` để tối ưu thêm. Không chạy nhiều Uvicorn workers khi APScheduler nằm trong API process; production nên tách scheduler thành process riêng hoặc dùng Celery Beat.
+
+## start BE khi đã build hoàn thiện
+
+new ternimal
+cd "D:\TRAN_BHQ\ebay-sheet-sync\backend"
+.\.venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000t 8000
+==> http://127.0.0.1:8000/docs
+
+## start FE khi đã hoàn thiện
+
+new terminal
+cd "D:\TRAN_BHQ\ebay-sheet-sync\frontend"
+npm run dev
+==> http://localhost:5173/
