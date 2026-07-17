@@ -12,6 +12,9 @@ from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
 from app.jobs.scheduler import start_scheduler, stop_scheduler
 from app.models import *  # noqa: F401,F403
+from app.api.exports import (
+    router as exports_router,
+)
 
 
 @asynccontextmanager
@@ -40,6 +43,11 @@ app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(google_router, prefix=settings.api_prefix)
 app.include_router(sync_router, prefix=settings.api_prefix, dependencies=_protected)
 app.include_router(listings_router, prefix=settings.api_prefix, dependencies=_protected)
+
+app.include_router(
+    exports_router,
+    prefix=settings.api_prefix,
+)
 
 
 @app.get("/health")
