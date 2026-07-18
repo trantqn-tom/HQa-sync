@@ -75,10 +75,27 @@ def build_listing_conditions(
     if statuses:
         conditions.append(EbayListing.listing_status.in_(statuses))
 
-    marketplaces = clean_string_list(filters.marketplaces)
+    marketplaces = clean_string_list(
+        filters.marketplaces,
+    )
 
     if marketplaces:
-        conditions.append(EbayListing.marketplace.in_(marketplaces))
+        conditions.append(
+            EbayListing.marketplace.in_(
+                marketplaces,
+            )
+        )
+
+    sellers = clean_string_list(
+        filters.sellers,
+    )
+
+    if sellers:
+        conditions.append(
+            EbayListing.seller_or_shop.in_(
+                sellers,
+            )
+        )
 
     if filters.action:
         action = filters.action.strip()

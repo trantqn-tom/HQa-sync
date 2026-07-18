@@ -101,15 +101,19 @@ Bản source sử dụng loop query để dễ đọc và chạy ổn ở 10.000
 
 ## start BE khi đã build hoàn thiện
 
-new ternimal
+```powershell
 cd "D:\TRAN_BHQ\ebay-sheet-sync\backend"
 .\.venv\Scripts\Activate.ps1
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000t 8000
+```
+
 ==> http://127.0.0.1:8000/docs
 
 ## start FE khi đã hoàn thiện
 
-new terminal
+```powershell
 cd "D:\TRAN_BHQ\ebay-sheet-sync\frontend"
 npm run dev
+```
+
 ==> http://localhost:5173/

@@ -129,6 +129,8 @@ export default function ExportModal({
 
       marketplaces: filters?.marketplaces || [],
 
+      sellers: filters?.sellers || [],
+
       action: filters?.action || null,
 
       product_id: filters?.product_id || null,
@@ -341,8 +343,8 @@ export default function ExportModal({
                 <strong>Toàn bộ kết quả sau lọc</strong>
 
                 <small>
-                  Export tất cả bản ghi phù hợp với search, marketplace, status
-                  và action hiện tại.
+                  Export tất cả bản ghi phù hợp với search, marketplace, status,
+                  seller và action hiện tại.
                 </small>
               </span>
             </label>

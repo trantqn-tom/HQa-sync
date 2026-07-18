@@ -14,23 +14,31 @@ export default function Listings() {
   const [q, setQ] = useState("");
   const [appliedQ, setAppliedQ] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState([]);
-  const [marketplace, setMarketplace] = useState("");
+  const [selectedMarketplaces, setSelectedMarketplaces] = useState([]);
+  const [selectedSellers, setSelectedSellers] = useState([]);
   const [action, setAction] = useState("");
   const [statuses, setStatuses] = useState([]);
   const [marketplaces, setMarketplaces] = useState([]);
+  const [sellers, setSellers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const loadMeta = async () => {
     try {
-      const [statusRes, marketplaceRes] = await Promise.all([
+      const [statusRes, marketplaceRes, sellerRes] = await Promise.all([
         api.get("/listings/meta/statuses"),
         api.get("/listings/meta/marketplaces"),
+        api.get("/listings/meta/sellers"),
       ]);
+
       setStatuses(statusRes.data.statuses || []);
+
       setMarketplaces(marketplaceRes.data.marketplaces || []);
+
+      setSellers(sellerRes.data.sellers || []);
     } catch {
       setStatuses([]);
       setMarketplaces([]);
+      setSellers([]);
     }
   };
 
@@ -43,7 +51,13 @@ export default function Listings() {
           page_size: 30,
           q: appliedQ || undefined,
           status: selectedStatuses.length ? selectedStatuses : undefined,
-          marketplace: marketplace || undefined,
+
+          marketplace: selectedMarketplaces.length
+            ? selectedMarketplaces
+            : undefined,
+
+          seller: selectedSellers.length ? selectedSellers : undefined,
+
           action: action || undefined,
         },
         paramsSerializer: {
@@ -71,7 +85,14 @@ export default function Listings() {
   }, []);
   useEffect(() => {
     load();
-  }, [page, appliedQ, selectedStatuses, marketplace, action]);
+  }, [
+    page,
+    appliedQ,
+    selectedStatuses,
+    selectedMarketplaces,
+    selectedSellers,
+    action,
+  ]);
 
   return (
     <>
@@ -116,17 +137,7 @@ export default function Listings() {
             placeholder="Listing ID, tiêu đề, thương hiệu..."
           />
         </div>
-        <select
-          value={marketplace}
-          onChange={(e) => resetToFirst(() => setMarketplace(e.target.value))}
-        >
-          <option value="">Tất cả marketplace</option>
-          {marketplaces.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
+
         <select
           value={action}
           onChange={(e) => resetToFirst(() => setAction(e.target.value))}
@@ -144,20 +155,42 @@ export default function Listings() {
             <thead>
               <tr>
                 <th>Thay đổi</th>
-                <th>Marketplace</th>
+                <th className="filter-th">
+                  <StatusHeaderFilter
+                    label="Marketplace"
+                    options={marketplaces}
+                    value={selectedMarketplaces}
+                    searchPlaceholder="Tìm marketplace"
+                    onChange={(next) =>
+                      resetToFirst(() => setSelectedMarketplaces(next))
+                    }
+                  />
+                </th>
                 <th>Sản phẩm</th>
                 <th>Listing</th>
                 <th>Giá</th>
-                <th className="status-th">
+                <th className="filter-th">
                   <StatusHeaderFilter
+                    label="Status"
                     options={statuses}
                     value={selectedStatuses}
+                    searchPlaceholder="Tìm status"
                     onChange={(next) =>
                       resetToFirst(() => setSelectedStatuses(next))
                     }
                   />
                 </th>
-                <th>Seller</th>
+                <th className="filter-th">
+                  <StatusHeaderFilter
+                    label="Seller"
+                    options={sellers}
+                    value={selectedSellers}
+                    searchPlaceholder="Tìm seller / shop"
+                    onChange={(next) =>
+                      resetToFirst(() => setSelectedSellers(next))
+                    }
+                  />
+                </th>
                 <th>Đồng bộ gần nhất</th>
               </tr>
             </thead>
@@ -227,7 +260,11 @@ export default function Listings() {
 
           statuses: selectedStatuses,
 
-          marketplaces: marketplace ? [marketplace] : [],
+          marketplaces: selectedMarketplaces,
+
+          sellers: selectedSellers,
+
+          action: action || null,
 
           action: action || null,
 

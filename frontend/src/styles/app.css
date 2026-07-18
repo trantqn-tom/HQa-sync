@@ -212,7 +212,7 @@ th {
   background: #f9fafb;
   color: #596274;
 }
-th.status-th {
+th.filter-th {
   overflow: visible;
   position: relative;
 }

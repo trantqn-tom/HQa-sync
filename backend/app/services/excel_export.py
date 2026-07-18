@@ -212,11 +212,21 @@ def create_export_info_sheet(
         ),
         (
             "Marketplaces",
-            ", ".join(filter_data.marketplaces),
+            ", ".join(
+                filter_data.marketplaces,
+            ),
+        ),
+        (
+            "Sellers",
+            ", ".join(
+                filter_data.sellers,
+            ),
         ),
         (
             "Statuses",
-            ", ".join(filter_data.statuses),
+            ", ".join(
+                filter_data.statuses,
+            ),
         ),
         (
             "Sync action",

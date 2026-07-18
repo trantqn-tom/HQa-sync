@@ -37,6 +37,38 @@ def list_marketplaces(db: Session = Depends(get_db)):
     return {"marketplaces": list(rows)}
 
 
+@router.get("/meta/sellers")
+def list_sellers(
+    db: Session = Depends(get_db),
+):
+    """
+    Lấy toàn bộ seller/shop không rỗng trong database.
+
+    Danh sách được:
+    - Loại trùng bằng DISTINCT.
+    - Sắp xếp tăng dần.
+    """
+    rows = db.scalars(
+        select(
+            EbayListing.seller_or_shop,
+        )
+        .where(
+            EbayListing.seller_or_shop.is_not(
+                None,
+            ),
+            EbayListing.seller_or_shop != "",
+        )
+        .distinct()
+        .order_by(
+            EbayListing.seller_or_shop.asc(),
+        )
+    ).all()
+
+    return {
+        "sellers": list(rows),
+    }
+
+
 @router.get("")
 def list_items(
     db: Session = Depends(get_db),
@@ -45,12 +77,19 @@ def list_items(
     q: str | None = None,
     status: list[str] | None = Query(None),
     marketplace: list[str] | None = Query(None),
+    seller: list[str] | None = Query(None),
     action: str | None = None,
     product_id: str | None = None,
 ):
     filters = []
     if q:
-        filters.append(or_(EbayListing.listing_title.ilike(f"%{q}%"), EbayListing.listing_id.ilike(f"%{q}%"), EbayListing.brand.ilike(f"%{q}%")))
+        filters.append(
+            or_(
+                EbayListing.listing_title.ilike(f"%{q}%"),
+                EbayListing.listing_id.ilike(f"%{q}%"),
+                EbayListing.brand.ilike(f"%{q}%"),
+            )
+        )
     if status:
         values = [item for item in status if item]
         if values:
@@ -59,6 +98,10 @@ def list_items(
         values = [item for item in marketplace if item]
         if values:
             filters.append(EbayListing.marketplace.in_(values))
+    if seller:
+        values = [item for item in seller if item]
+        if values:
+            filters.append(EbayListing.seller_or_shop.in_(values))
     if action:
         filters.append(EbayListing.last_sync_action == action)
     if product_id:
@@ -73,13 +116,32 @@ def list_items(
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
-    return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": (total + page_size - 1) // page_size}
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size,
+    }
 
 
 @router.get("/{listing_pk}")
 def detail(listing_pk: int, db: Session = Depends(get_db)):
-    item = db.scalar(select(EbayListing).options(selectinload(EbayListing.detail)).where(EbayListing.id == listing_pk))
+    item = db.scalar(
+        select(EbayListing)
+        .options(selectinload(EbayListing.detail))
+        .where(EbayListing.id == listing_pk)
+    )
     if not item:
         raise HTTPException(status_code=404, detail="Không tìm thấy listing")
-    history = db.scalars(select(EbayListingChange).where(EbayListingChange.listing_id_fk == listing_pk).order_by(EbayListingChange.created_at.desc()).limit(50)).all()
-    return {"listing": item, "raw_payload": item.detail.raw_payload if item.detail else {}, "history": history}
+    history = db.scalars(
+        select(EbayListingChange)
+        .where(EbayListingChange.listing_id_fk == listing_pk)
+        .order_by(EbayListingChange.created_at.desc())
+        .limit(50)
+    ).all()
+    return {
+        "listing": item,
+        "raw_payload": item.detail.raw_payload if item.detail else {},
+        "history": history,
+    }

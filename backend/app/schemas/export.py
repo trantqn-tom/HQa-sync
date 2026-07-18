@@ -63,9 +63,17 @@ ALLOWED_EXPORT_COLUMNS = {
 class ListingExportFilters(BaseModel):
     q: str | None = None
 
-    statuses: list[str] = Field(default_factory=list)
+    statuses: list[str] = Field(
+        default_factory=list,
+    )
 
-    marketplaces: list[str] = Field(default_factory=list)
+    marketplaces: list[str] = Field(
+        default_factory=list,
+    )
+
+    sellers: list[str] = Field(
+        default_factory=list,
+    )
 
     action: str | None = None
     product_id: str | None = None
