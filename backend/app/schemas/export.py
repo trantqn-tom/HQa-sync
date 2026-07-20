@@ -4,60 +4,50 @@ from pydantic import BaseModel, Field, field_validator
 
 
 DEFAULT_EXPORT_COLUMNS = [
-    "marketplace",
-    "listing_id",
-    "product_id",
-    "keyword",
-    "brand",
-    "model",
-    "category_name",
-    "listing_title",
-    "listing_url",
-    "seller_or_shop",
-    "price",
-    "shipping_price",
-    "total_price",
-    "currency",
-    "listing_status",
-    "condition",
-    "location",
-    "quantity",
-    "last_sync_action",
-    "last_seen_at",
+    "raw::marketplace",
+    "raw::listing_id",
+    "raw::product_id",
+    "raw::keyword",
+    "raw::brand",
+    "raw::model",
+    "raw::category_name",
+    "raw::listing_title",
+    "raw::listing_url",
+    "raw::seller_or_shop",
+    "raw::price",
+    "raw::shipping_price",
+    "raw::total_price",
+    "raw::currency",
+    "raw::listing_status",
+    "raw::condition",
+    "raw::location",
 ]
 
 
-ALLOWED_EXPORT_COLUMNS = {
-    "marketplace",
-    "listing_id",
-    "product_id",
-    "keyword",
-    "brand",
-    "model",
-    "category",
-    "category_name",
-    "listing_title",
-    "listing_url",
-    "seller_or_shop",
-    "price",
-    "shipping_price",
-    "total_price",
-    "currency",
-    "listing_status",
-    "condition",
-    "location",
-    "quantity",
-    "match_type",
-    "exclude_flag",
-    "raw_confidence",
-    "last_sync_action",
-    "listing_published_at",
-    "collected_at",
-    "last_seen_at",
-    "last_status_checked_at",
-    "created_at",
-    "updated_at",
-}
+def normalize_export_columns(
+    columns: list[str],
+) -> list[str]:
+    result: list[str] = []
+
+    for column in columns:
+        value = str(column or "").strip()
+
+        if not value:
+            continue
+
+        if not value.startswith(("raw::", "db::")):
+            raise ValueError(f"Định dạng cột export không hợp lệ: {value}")
+
+        if len(value) > 255:
+            raise ValueError("Tên cột export quá dài")
+
+        if value not in result:
+            result.append(value)
+
+    if not result:
+        raise ValueError("Phải chọn ít nhất một cột export")
+
+    return result
 
 
 class ListingExportFilters(BaseModel):
@@ -125,19 +115,7 @@ class ExcelExportRequest(BaseModel):
         cls,
         columns: list[str],
     ) -> list[str]:
-        unique_columns = []
-
-        for column in columns:
-            if column not in ALLOWED_EXPORT_COLUMNS:
-                raise ValueError(f"Cột export không hợp lệ: {column}")
-
-            if column not in unique_columns:
-                unique_columns.append(column)
-
-        if not unique_columns:
-            raise ValueError("Phải chọn ít nhất một cột export")
-
-        return unique_columns
+        return normalize_export_columns(columns)
 
 
 class GoogleSheetExportRequest(BaseModel):
@@ -221,3 +199,39 @@ class GoogleSheetExportRequest(BaseModel):
 
 class GoogleSheetPreviewRequest(BaseModel):
     spreadsheet_url: str
+
+
+class PdfExportRequest(BaseModel):
+    scope: Literal[
+        "FILTERED",
+        "CURRENT_PAGE",
+    ] = "FILTERED"
+
+    filters: ListingExportFilters = Field(default_factory=ListingExportFilters)
+
+    columns: list[str] = Field(default_factory=lambda: DEFAULT_EXPORT_COLUMNS.copy())
+
+    sort: ExportSort = Field(default_factory=ExportSort)
+
+    page: int = Field(
+        default=1,
+        ge=1,
+    )
+
+    page_size: int = Field(
+        default=30,
+        ge=1,
+        le=200,
+    )
+
+    title: str | None = "Marketplace Listings"
+
+    filename: str | None = None
+
+    @field_validator("columns")
+    @classmethod
+    def validate_columns(
+        cls,
+        columns: list[str],
+    ) -> list[str]:
+        return normalize_export_columns(columns)

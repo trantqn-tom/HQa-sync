@@ -263,9 +263,6 @@ export default function Listings() {
           marketplaces: selectedMarketplaces,
 
           sellers: selectedSellers,
-
-          action: action || null,
-
           action: action || null,
 
           product_id: null,

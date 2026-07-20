@@ -24,7 +24,10 @@ from app.services.listing_export_query import (
     build_listing_export_query,
     stream_listing_rows,
 )
-
+from app.services.export_columns import (
+    get_export_column_config,
+    resolve_export_value,
+)
 
 VN_TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 
@@ -610,10 +613,7 @@ def build_sheet_header(
     header: list[str] = []
 
     for column in columns:
-        config = EXPORT_COLUMN_CONFIG.get(column)
-
-        if config is None:
-            raise ValueError(f"Không có cấu hình export cho cột: {column}")
+        config = get_export_column_config(column)
 
         header.append(config["label"])
 
@@ -626,10 +626,9 @@ def build_listing_row(
 ) -> list[Any]:
     return [
         normalize_google_sheet_value(
-            getattr(
+            resolve_export_value(
                 listing,
                 column,
-                None,
             )
         )
         for column in columns

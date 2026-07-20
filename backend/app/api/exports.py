@@ -8,12 +8,19 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from app.services.export_columns import (
+    get_export_column_options,
+)
 
+from app.services.pdf_export import (
+    export_listings_to_pdf,
+)
 from app.core.database import get_db
 from app.schemas.export import (
     ExcelExportRequest,
     GoogleSheetExportRequest,
     GoogleSheetPreviewRequest,
+    PdfExportRequest,
 )
 from app.services.excel_export import (
     export_listings_to_excel,
@@ -24,7 +31,6 @@ from app.services.google_sheet_export import (
     get_spreadsheet_metadata,
     parse_google_sheet_url,
 )
-
 
 router = APIRouter(
     prefix="/exports",
@@ -185,4 +191,73 @@ def export_google_sheet(
         raise HTTPException(
             status_code=500,
             detail=("Không thể export Google Sheet."),
+        ) from exc
+
+
+@router.get("/columns")
+def list_export_columns(
+    db: Session = Depends(get_db),
+):
+    try:
+        return get_export_column_options(db)
+
+    except Exception as exc:
+        print(
+            "Export columns error:",
+            repr(exc),
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=("Không thể đọc danh sách cột từ nguồn đồng bộ."),
+        ) from exc
+
+
+@router.post("/pdf")
+def export_pdf(
+    payload: PdfExportRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    try:
+        (
+            file_path,
+            filename,
+            exported_rows,
+        ) = export_listings_to_pdf(
+            db=db,
+            request=payload,
+        )
+
+        background_tasks.add_task(
+            remove_temporary_file,
+            str(file_path),
+        )
+
+        response = FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type="application/pdf",
+            background=background_tasks,
+        )
+
+        response.headers["X-Exported-Rows"] = str(exported_rows)
+
+        return response
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        print(
+            "PDF export error:",
+            repr(exc),
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Không thể tạo file PDF.",
         ) from exc

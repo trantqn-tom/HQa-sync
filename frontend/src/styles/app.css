@@ -1,7 +1,11 @@
 :root {
-  font-family: Inter, Arial, sans-serif;
+  font-family: "Montserrat", sans-serif;
+  font-weight: normal;
+  white-space: normal;
+  line-height: 1.5;
   color: #172033;
   background: #f5f7fb;
+  font-size: 14px;
 }
 * {
   box-sizing: border-box;
@@ -159,6 +163,7 @@ body {
   align-items: center;
   cursor: pointer;
 }
+
 .toolbar {
   display: flex;
   gap: 12px;
@@ -753,8 +758,27 @@ tr.no-pointer:hover {
 
 .export-type-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+.export-checkbox span {
+  min-width: 0;
+}
+
+.export-checkbox small {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .export-type-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .export-columns-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .export-type-card {
@@ -854,9 +878,16 @@ tr.no-pointer:hover {
 
 .text-button {
   padding: 0;
-  color: #2563eb;
+  color: #999;
+  cursor: pointer;
   background: transparent;
   border: 0;
+  transition: 0.4s;
+  font-weight: 500;
+}
+
+.text-button:hover {
+  color: #354568;
 }
 
 .secondary-button {

@@ -1,96 +1,14 @@
-import { useMemo, useState } from "react";
-import { Download, FileSpreadsheet, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+
+import { Download, FileSpreadsheet, FileText, X } from "lucide-react";
 
 import {
   exportListingsToExcel,
   exportListingsToGoogleSheet,
+  exportListingsToPdf,
+  getExportColumns,
   previewGoogleSheet,
 } from "../api/exportApi";
-
-const EXPORT_COLUMNS = [
-  {
-    key: "marketplace",
-    label: "Marketplace",
-  },
-  {
-    key: "listing_id",
-    label: "Listing ID",
-  },
-  {
-    key: "product_id",
-    label: "Product ID",
-  },
-  {
-    key: "keyword",
-    label: "Keyword",
-  },
-  {
-    key: "brand",
-    label: "Brand",
-  },
-  {
-    key: "model",
-    label: "Model",
-  },
-  {
-    key: "category_name",
-    label: "Category",
-  },
-  {
-    key: "listing_title",
-    label: "Listing title",
-  },
-  {
-    key: "listing_url",
-    label: "Listing URL",
-  },
-  {
-    key: "seller_or_shop",
-    label: "Seller / Shop",
-  },
-  {
-    key: "price",
-    label: "Price",
-  },
-  {
-    key: "shipping_price",
-    label: "Shipping price",
-  },
-  {
-    key: "total_price",
-    label: "Total price",
-  },
-  {
-    key: "currency",
-    label: "Currency",
-  },
-  {
-    key: "listing_status",
-    label: "Status",
-  },
-  {
-    key: "condition",
-    label: "Condition",
-  },
-  {
-    key: "location",
-    label: "Location",
-  },
-  {
-    key: "quantity",
-    label: "Quantity",
-  },
-  {
-    key: "last_sync_action",
-    label: "Sync action",
-  },
-  {
-    key: "last_seen_at",
-    label: "Last seen",
-  },
-];
-
-const DEFAULT_COLUMNS = EXPORT_COLUMNS.map((item) => item.key);
 
 export default function ExportModal({
   open,
@@ -100,53 +18,101 @@ export default function ExportModal({
   pageSize = 30,
 }) {
   const [exportType, setExportType] = useState("EXCEL");
-
   const [scope, setScope] = useState("FILTERED");
 
-  const [selectedColumns, setSelectedColumns] = useState(DEFAULT_COLUMNS);
+  const [columnOptions, setColumnOptions] = useState([]);
+  const [selectedColumns, setSelectedColumns] = useState([]);
+  const [loadingColumns, setLoadingColumns] = useState(false);
+  const [columnSearch, setColumnSearch] = useState("");
 
   const [spreadsheetUrl, setSpreadsheetUrl] = useState("");
-
   const [targetTabName, setTargetTabName] = useState("");
-
   const [writeMode, setWriteMode] = useState("NEW_TAB");
-
   const [preview, setPreview] = useState(null);
-
   const [loadingPreview, setLoadingPreview] = useState(false);
 
   const [exporting, setExporting] = useState(false);
-
   const [error, setError] = useState("");
-
   const [success, setSuccess] = useState("");
 
   const payloadFilters = useMemo(
     () => ({
       q: filters?.q || null,
-
       statuses: filters?.statuses || [],
-
       marketplaces: filters?.marketplaces || [],
-
       sellers: filters?.sellers || [],
-
       action: filters?.action || null,
-
       product_id: filters?.product_id || null,
-
       brand: filters?.brand || null,
-
       category_name: filters?.category_name || null,
-
       condition: filters?.condition || null,
-
       price_min: filters?.price_min ?? null,
-
       price_max: filters?.price_max ?? null,
     }),
     [filters],
   );
+
+  const visibleColumnOptions = useMemo(() => {
+    const query = columnSearch.trim().toLowerCase();
+
+    if (!query) {
+      return columnOptions;
+    }
+
+    return columnOptions.filter((column) =>
+      String(column?.label || "")
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [columnOptions, columnSearch]);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const loadColumns = async () => {
+      setLoadingColumns(true);
+      setError("");
+      setSuccess("");
+
+      try {
+        const result = await getExportColumns();
+
+        if (!active) {
+          return;
+        }
+
+        const columns = Array.isArray(result?.columns) ? result.columns : [];
+        const defaultColumns = Array.isArray(result?.default_columns)
+          ? result.default_columns
+          : [];
+
+        setColumnOptions(columns);
+        setSelectedColumns(defaultColumns);
+      } catch (loadError) {
+        if (active) {
+          setColumnOptions([]);
+          setSelectedColumns([]);
+          setError(
+            loadError?.message || "Không thể tải danh sách trường export.",
+          );
+        }
+      } finally {
+        if (active) {
+          setLoadingColumns(false);
+        }
+      }
+    };
+
+    loadColumns();
+
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   if (!open) {
     return null;
@@ -163,7 +129,18 @@ export default function ExportModal({
   };
 
   const selectAllColumns = () => {
-    setSelectedColumns(EXPORT_COLUMNS.map((item) => item.key));
+    setSelectedColumns(
+      columnOptions.map((column) => column?.key).filter(Boolean),
+    );
+  };
+
+  const selectAllSourceColumns = () => {
+    setSelectedColumns(
+      columnOptions
+        .filter((column) => column?.source === "google_sheet")
+        .map((column) => column?.key)
+        .filter(Boolean),
+    );
   };
 
   const clearColumns = () => {
@@ -176,7 +153,7 @@ export default function ExportModal({
     setPreview(null);
 
     if (!spreadsheetUrl.trim()) {
-      setError("Vui lòng nhập Google Sheet URL");
+      setError("Vui lòng nhập Google Sheet URL.");
       return;
     }
 
@@ -184,10 +161,9 @@ export default function ExportModal({
 
     try {
       const result = await previewGoogleSheet(spreadsheetUrl.trim());
-
       setPreview(result);
     } catch (previewError) {
-      setError(previewError.message);
+      setError(previewError?.message || "Không thể kiểm tra Google Sheet.");
     } finally {
       setLoadingPreview(false);
     }
@@ -195,16 +171,12 @@ export default function ExportModal({
 
   const buildCommonPayload = () => ({
     scope,
-
     filters: payloadFilters,
-
     columns: selectedColumns,
-
     sort: {
       field: "last_seen_at",
       order: "desc",
     },
-
     page,
     page_size: pageSize,
   });
@@ -214,55 +186,99 @@ export default function ExportModal({
     setSuccess("");
 
     if (selectedColumns.length === 0) {
-      setError("Vui lòng chọn ít nhất một cột export");
+      setError("Vui lòng chọn ít nhất một trường để export.");
       return;
     }
 
     if (exportType === "GOOGLE_SHEET" && !spreadsheetUrl.trim()) {
-      setError("Vui lòng nhập Google Sheet URL");
+      setError("Vui lòng nhập Google Sheet URL.");
       return;
     }
 
     setExporting(true);
 
     try {
+      const commonPayload = buildCommonPayload();
+
       if (exportType === "EXCEL") {
         const result = await exportListingsToExcel({
-          ...buildCommonPayload(),
-
+          ...commonPayload,
           filename: null,
         });
 
+        const exportedRows = Number(result?.exportedRows || 0);
+
         setSuccess(
-          result.exportedRows
-            ? `Đã export ${Number(result.exportedRows).toLocaleString()} dòng`
-            : "Export Excel thành công",
+          exportedRows > 0
+            ? `Đã xuất Excel ${exportedRows.toLocaleString("vi-VN")} dòng.`
+            : "Xuất file Excel thành công.",
         );
-      } else {
+
+        return;
+      }
+
+      if (exportType === "PDF") {
+        const result = await exportListingsToPdf({
+          ...commonPayload,
+          title: "Báo cáo Marketplace Listings",
+          filename: null,
+        });
+
+        const exportedRows = Number(result?.exportedRows || 0);
+
+        setSuccess(
+          exportedRows > 0
+            ? `Đã xuất PDF ${exportedRows.toLocaleString("vi-VN")} dòng.`
+            : "Xuất file PDF thành công.",
+        );
+
+        return;
+      }
+
+      if (exportType === "GOOGLE_SHEET") {
         const result = await exportListingsToGoogleSheet({
-          ...buildCommonPayload(),
-
+          ...commonPayload,
           spreadsheet_url: spreadsheetUrl.trim(),
-
           target_tab_name: targetTabName.trim() || null,
-
           write_mode: writeMode,
         });
 
+        const exportedRows = Number(result?.exported_rows || 0);
+
         setSuccess(
-          `Đã export ${Number(result.exported_rows).toLocaleString()} dòng`,
+          exportedRows > 0
+            ? `Đã xuất Google Sheet ${exportedRows.toLocaleString(
+                "vi-VN",
+              )} dòng.`
+            : "Xuất Google Sheet thành công.",
         );
 
-        if (result.output_url) {
+        if (result?.output_url) {
           window.open(result.output_url, "_blank", "noopener,noreferrer");
         }
+
+        return;
       }
+
+      throw new Error(`Định dạng export không được hỗ trợ: ${exportType}`);
     } catch (exportError) {
-      setError(exportError.message);
+      console.error("Export listings error:", exportError);
+
+      setError(
+        exportError?.message || "Không thể export dữ liệu. Vui lòng thử lại.",
+      );
     } finally {
       setExporting(false);
     }
   };
+
+  const exportButtonLabel = exporting
+    ? "Đang export..."
+    : exportType === "EXCEL"
+      ? "Tải file Excel"
+      : exportType === "PDF"
+        ? "Tải file PDF"
+        : "Export Google Sheet";
 
   return (
     <div className="export-modal-backdrop" onMouseDown={onClose}>
@@ -324,6 +340,23 @@ export default function ExportModal({
                   <small>Ghi vào file được chỉ định</small>
                 </span>
               </button>
+
+              <button
+                type="button"
+                className={
+                  exportType === "PDF"
+                    ? "export-type-card active"
+                    : "export-type-card"
+                }
+                onClick={() => setExportType("PDF")}
+              >
+                <FileText size={22} />
+
+                <span>
+                  <strong>PDF</strong>
+                  <small>Xuất kết quả thành file PDF</small>
+                </span>
+              </button>
             </div>
           </section>
 
@@ -368,13 +401,23 @@ export default function ExportModal({
 
           <section className="export-section">
             <div className="export-section-title">
-              <h3>3. Chọn cột</h3>
+              <h3>3. Chọn trường xuất</h3>
 
               <div>
                 <button
                   type="button"
                   className="text-button"
+                  onClick={selectAllSourceColumns}
+                  disabled={loadingColumns}
+                >
+                  Chọn trường Google Sheet
+                </button>
+
+                <button
+                  type="button"
+                  className="text-button"
                   onClick={selectAllColumns}
+                  disabled={loadingColumns}
                 >
                   Chọn tất cả
                 </button>
@@ -383,25 +426,54 @@ export default function ExportModal({
                   type="button"
                   className="text-button"
                   onClick={clearColumns}
+                  disabled={loadingColumns}
                 >
                   Bỏ chọn
                 </button>
               </div>
             </div>
 
-            <div className="export-columns-grid">
-              {EXPORT_COLUMNS.map((column) => (
-                <label key={column.key} className="export-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={selectedColumns.includes(column.key)}
-                    onChange={() => toggleColumn(column.key)}
-                  />
+            <label className="export-field">
+              <span>Tìm trường</span>
 
-                  <span>{column.label}</span>
-                </label>
-              ))}
-            </div>
+              <input
+                className="mb-[12px]"
+                value={columnSearch}
+                onChange={(event) => setColumnSearch(event.target.value)}
+                placeholder="listing_id, condition_id..."
+                disabled={loadingColumns}
+              />
+            </label>
+
+            {loadingColumns ? (
+              <p>Đang đọc trường từ nguồn đồng bộ...</p>
+            ) : columnOptions.length === 0 ? (
+              <p>Không tìm thấy trường dữ liệu để export.</p>
+            ) : visibleColumnOptions.length === 0 ? (
+              <p>Không có trường phù hợp với từ khóa tìm kiếm.</p>
+            ) : (
+              <div className="export-columns-grid">
+                {visibleColumnOptions.map((column) => (
+                  <label key={column.key} className="export-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selectedColumns.includes(column.key)}
+                      onChange={() => toggleColumn(column.key)}
+                    />
+
+                    <span>
+                      {column.label}
+
+                      <small>
+                        {column.source === "google_sheet"
+                          ? "Google Sheet"
+                          : "Hệ thống"}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
           </section>
 
           {exportType === "GOOGLE_SHEET" && (
@@ -504,13 +576,11 @@ export default function ExportModal({
             className="secondary-button"
             type="button"
             onClick={handleExport}
-            disabled={exporting || selectedColumns.length === 0}
+            disabled={
+              exporting || loadingColumns || selectedColumns.length === 0
+            }
           >
-            {exporting
-              ? "Đang export..."
-              : exportType === "EXCEL"
-                ? "Tải file Excel"
-                : "Export Google Sheet"}
+            {exportButtonLabel}
           </button>
         </div>
       </div>

@@ -21,14 +21,15 @@ from sqlalchemy.orm import Session
 from app.schemas.export import (
     ExcelExportRequest,
 )
-from app.services.excel_columns import (
-    EXPORT_COLUMN_CONFIG,
-)
+
 from app.services.listing_export_query import (
     build_listing_export_query,
     stream_listing_rows,
 )
-
+from app.services.export_columns import (
+    get_export_column_config,
+    resolve_export_value,
+)
 
 VN_TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 
@@ -108,7 +109,7 @@ def configure_sheet(
         columns,
         start=1,
     ):
-        config = EXPORT_COLUMN_CONFIG[column]
+        config = get_export_column_config(column)
 
         column_letter = get_column_letter(index)
 
@@ -125,7 +126,7 @@ def append_header(
     header_cells = []
 
     for column in columns:
-        config = EXPORT_COLUMN_CONFIG[column]
+        config = get_export_column_config(column)
 
         cell = WriteOnlyCell(
             worksheet,
@@ -149,12 +150,11 @@ def append_listing_row(
     row_cells = []
 
     for column in columns:
-        config = EXPORT_COLUMN_CONFIG[column]
+        config = get_export_column_config(column)
 
-        raw_value = getattr(
+        raw_value = resolve_export_value(
             listing,
             column,
-            None,
         )
 
         value = normalize_excel_value(raw_value)

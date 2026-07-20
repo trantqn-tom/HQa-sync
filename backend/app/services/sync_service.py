@@ -10,20 +10,37 @@ from app.services.normalizer import changed_fields, json_safe, normalize_row
 
 LOCK_ID = 8302026
 EXPECTED_HEADERS = {
-    "research_date", "collected_at", "product_id", "brand", "model", "category", "keyword",
-    "marketplace", "listing_id", "listing_title", "listing_status", "price", "total_price"
+    "research_date",
+    "collected_at",
+    "product_id",
+    "brand",
+    "model",
+    "category",
+    "keyword",
+    "marketplace",
+    "listing_id",
+    "listing_title",
+    "listing_status",
+    "price",
+    "total_price",
 }
 
 
 def _connection(db: Session) -> GoogleConnection:
-    connection = db.scalar(select(GoogleConnection).where(GoogleConnection.is_active.is_(True)).order_by(GoogleConnection.id.desc()))
+    connection = db.scalar(
+        select(GoogleConnection)
+        .where(GoogleConnection.is_active.is_(True))
+        .order_by(GoogleConnection.id.desc())
+    )
     if not connection:
         raise RuntimeError("Google OAuth chưa được kết nối")
     return connection
 
 
 def run_sync(db: Session, trigger_type: str = "MANUAL") -> SyncRun:
-    locked = db.execute(text("SELECT pg_try_advisory_lock(:id)"), {"id": LOCK_ID}).scalar()
+    locked = db.execute(
+        text("SELECT pg_try_advisory_lock(:id)"), {"id": LOCK_ID}
+    ).scalar()
     if not locked:
         raise RuntimeError("Một tiến trình đồng bộ khác đang chạy")
 
@@ -50,7 +67,10 @@ def run_sync(db: Session, trigger_type: str = "MANUAL") -> SyncRun:
         mapped_rows: list[tuple[dict, dict]] = []
         invalid: list[dict] = []
         for source_row, values in enumerate(rows, start=2):
-            raw = {header: values[index] if index < len(values) else None for index, header in enumerate(headers)}
+            raw = {
+                header: values[index] if index < len(values) else None
+                for index, header in enumerate(headers)
+            }
             if not any(value not in (None, "") for value in raw.values()):
                 continue
             normalized, errors = normalize_row(raw)
@@ -63,15 +83,26 @@ def run_sync(db: Session, trigger_type: str = "MANUAL") -> SyncRun:
         run.valid_rows = len(mapped_rows)
         run.invalid_rows = len(invalid)
         run.error_count = len(invalid)
-        run.details = json_safe({"invalid_rows": invalid[:100]})
+        run.details = json_safe(
+            {
+                # Lưu đúng thứ tự cột tại thời điểm đồng bộ.
+                "source_headers": headers,
+                # Chỉ lưu tối đa 100 dòng lỗi để tránh JSON quá lớn.
+                "invalid_rows": invalid[:100],
+            }
+        )
         if invalid:
             raise ValueError("Có dòng dữ liệu không hợp lệ; Sheet chưa được clear")
 
         now = now_vn()
         incoming_ids = list({item[0]["listing_id"] for item in mapped_rows})
-        existing_items = db.scalars(
-            select(EbayListing).where(EbayListing.listing_id.in_(incoming_ids))
-        ).all() if incoming_ids else []
+        existing_items = (
+            db.scalars(
+                select(EbayListing).where(EbayListing.listing_id.in_(incoming_ids))
+            ).all()
+            if incoming_ids
+            else []
+        )
         existing_map = {
             (item.marketplace, item.listing_id, item.product_id, item.keyword_key): item
             for item in existing_items
@@ -79,15 +110,24 @@ def run_sync(db: Session, trigger_type: str = "MANUAL") -> SyncRun:
 
         for normalized, raw in mapped_rows:
             business_key = (
-                normalized["marketplace"], normalized["listing_id"],
-                normalized["product_id"], normalized["keyword_key"]
+                normalized["marketplace"],
+                normalized["listing_id"],
+                normalized["product_id"],
+                normalized["keyword_key"],
             )
             existing = existing_map.get(business_key)
             payload_hash = normalized.pop("payload_hash")
             safe_raw = json_safe(raw)
             if existing is None:
-                listing = EbayListing(**normalized, last_seen_at=now, last_sync_action="INSERT", last_sync_run_id=run.id)
-                listing.detail = EbayListingDetail(raw_payload=safe_raw, payload_hash=payload_hash)
+                listing = EbayListing(
+                    **normalized,
+                    last_seen_at=now,
+                    last_sync_action="INSERT",
+                    last_sync_run_id=run.id,
+                )
+                listing.detail = EbayListingDetail(
+                    raw_payload=safe_raw, payload_hash=payload_hash
+                )
                 db.add(listing)
                 existing_map[business_key] = listing
                 run.insert_count += 1
@@ -103,7 +143,11 @@ def run_sync(db: Session, trigger_type: str = "MANUAL") -> SyncRun:
                     existing.detail.payload_hash = payload_hash
                 continue
 
-            before = {field: getattr(existing, field) for field in normalized if hasattr(existing, field)}
+            before = {
+                field: getattr(existing, field)
+                for field in normalized
+                if hasattr(existing, field)
+            }
             changes = changed_fields(before, normalized)
             for key, value in normalized.items():
                 if hasattr(existing, key):
@@ -115,11 +159,20 @@ def run_sync(db: Session, trigger_type: str = "MANUAL") -> SyncRun:
                 existing.detail.raw_payload = safe_raw
                 existing.detail.payload_hash = payload_hash
             else:
-                existing.detail = EbayListingDetail(raw_payload=safe_raw, payload_hash=payload_hash)
+                existing.detail = EbayListingDetail(
+                    raw_payload=safe_raw, payload_hash=payload_hash
+                )
             # Flush so newly inserted listings in this run get DB ids before history rows.
             if existing.id is None:
                 db.flush()
-            db.add(EbayListingChange(listing_id_fk=existing.id, sync_run_id=run.id, change_type="UPDATE", changed_fields=changes))
+            db.add(
+                EbayListingChange(
+                    listing_id_fk=existing.id,
+                    sync_run_id=run.id,
+                    change_type="UPDATE",
+                    changed_fields=changes,
+                )
+            )
             run.update_count += 1
 
         if run.valid_rows != run.insert_count + run.update_count + run.skip_count:

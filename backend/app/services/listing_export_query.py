@@ -8,7 +8,7 @@ from sqlalchemy import (
     or_,
     select,
 )
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.listing import EbayListing
 from app.schemas.export import (
@@ -140,7 +140,7 @@ def build_listing_export_query(
     filters: ListingExportFilters,
     sort: ExportSort,
 ) -> Select:
-    query = select(EbayListing)
+    query = select(EbayListing).options(selectinload(EbayListing.detail))
 
     conditions = build_listing_conditions(filters)
 

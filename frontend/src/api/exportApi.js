@@ -1,8 +1,11 @@
 import { api } from "./client";
 
-function getFilenameFromHeader(contentDisposition) {
+/**
+ * Lấy tên file từ Content-Disposition.
+ */
+function getFilenameFromHeader(contentDisposition, fallbackFilename) {
   if (!contentDisposition) {
-    return "marketplace-listings.xlsx";
+    return fallbackFilename;
   }
 
   const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
@@ -13,9 +16,12 @@ function getFilenameFromHeader(contentDisposition) {
 
   const normalMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
 
-  return normalMatch?.[1] || "marketplace-listings.xlsx";
+  return normalMatch?.[1] || fallbackFilename;
 }
 
+/**
+ * Đọc thông báo lỗi khi API trả về Blob.
+ */
 async function parseBlobError(error) {
   const responseData = error?.response?.data;
 
@@ -27,46 +33,84 @@ async function parseBlobError(error) {
     const text = await responseData.text();
     const json = JSON.parse(text);
 
-    return json.detail || "Có lỗi xảy ra";
+    return json?.detail || "Có lỗi xảy ra";
   } catch {
-    return "Có lỗi xảy ra";
+    try {
+      return await responseData.text();
+    } catch {
+      return "Có lỗi xảy ra";
+    }
   }
 }
 
+/**
+ * Tạo file download từ response Blob.
+ */
+function downloadBlob(response, fallbackFilename, fallbackContentType) {
+  const filename = getFilenameFromHeader(
+    response.headers["content-disposition"],
+    fallbackFilename,
+  );
+
+  const blob = new Blob([response.data], {
+    type:
+      response.headers["content-type"] ||
+      fallbackContentType ||
+      "application/octet-stream",
+  });
+
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.style.display = "none";
+
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(objectUrl);
+  }, 1000);
+
+  return {
+    filename,
+    exportedRows: response.headers["x-exported-rows"] || null,
+  };
+}
+
+/**
+ * Đọc danh sách trường có thể export.
+ */
+export async function getExportColumns() {
+  try {
+    const response = await api.get("/exports/columns");
+
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      error?.response?.data?.detail ||
+        error?.message ||
+        "Không thể đọc danh sách trường export",
+    );
+  }
+}
+
+/**
+ * Xuất file Excel.
+ */
 export async function exportListingsToExcel(payload) {
   try {
     const response = await api.post("/exports/excel", payload, {
       responseType: "blob",
     });
 
-    const filename = getFilenameFromHeader(
-      response.headers["content-disposition"],
+    return downloadBlob(
+      response,
+      "marketplace-listings.xlsx",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
-
-    const blob = new Blob([response.data], {
-      type:
-        response.headers["content-type"] ||
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-
-    const objectUrl = URL.createObjectURL(blob);
-
-    const anchor = document.createElement("a");
-
-    anchor.href = objectUrl;
-    anchor.download = filename;
-
-    document.body.appendChild(anchor);
-
-    anchor.click();
-    anchor.remove();
-
-    URL.revokeObjectURL(objectUrl);
-
-    return {
-      exportedRows: response.headers["x-exported-rows"] || null,
-      filename,
-    };
   } catch (error) {
     const message = await parseBlobError(error);
 
@@ -74,6 +118,30 @@ export async function exportListingsToExcel(payload) {
   }
 }
 
+/**
+ * Xuất file PDF.
+ */
+export async function exportListingsToPdf(payload) {
+  try {
+    const response = await api.post("/exports/pdf", payload, {
+      responseType: "blob",
+    });
+
+    return downloadBlob(
+      response,
+      "marketplace-listings.pdf",
+      "application/pdf",
+    );
+  } catch (error) {
+    const message = await parseBlobError(error);
+
+    throw new Error(message);
+  }
+}
+
+/**
+ * Kiểm tra Google Sheet đích và danh sách tab.
+ */
 export async function previewGoogleSheet(spreadsheetUrl) {
   try {
     const response = await api.post("/exports/google-sheet/preview", {
@@ -90,6 +158,9 @@ export async function previewGoogleSheet(spreadsheetUrl) {
   }
 }
 
+/**
+ * Xuất dữ liệu sang Google Sheet.
+ */
 export async function exportListingsToGoogleSheet(payload) {
   try {
     const response = await api.post("/exports/google-sheet", payload);

@@ -18,9 +18,29 @@ router = APIRouter(prefix="/google", tags=["Google OAuth"])
 
 
 @router.get("/status")
-def status(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    item = db.scalar(select(GoogleConnection).where(GoogleConnection.is_active.is_(True)).order_by(GoogleConnection.id.desc()))
-    return {"connected": bool(item), "email": item.google_email if item else None}
+def status(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    item = db.scalar(
+        select(GoogleConnection)
+        .where(GoogleConnection.is_active.is_(True))
+        .order_by(GoogleConnection.id.desc())
+    )
+
+    return {
+        "connected": bool(item),
+        "email": item.google_email if item else None,
+        # Thông tin nguồn đồng bộ lấy từ backend/.env
+        "spreadsheet_id": settings.google_spreadsheet_id,
+        "sheet_name": settings.google_sheet_name,
+        "auto_clear_after_sync": settings.auto_clear_after_sync,
+        # URL được tạo từ Spreadsheet ID
+        "spreadsheet_url": (
+            "https://docs.google.com/spreadsheets/d/"
+            f"{settings.google_spreadsheet_id}/edit"
+        ),
+    }
 
 
 @router.get("/connect")
@@ -42,13 +62,17 @@ def callback(code: str, state: str, db: Session = Depends(get_db)):
     try:
         code_verifier = parse_oauth_state(state)
     except ValueError:
-        raise HTTPException(status_code=400, detail="OAuth state không hợp lệ") from None
+        raise HTTPException(
+            status_code=400, detail="OAuth state không hợp lệ"
+        ) from None
 
     flow = create_flow(state=state, code_verifier=code_verifier)
     try:
         flow.fetch_token(code=code)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Đổi code OAuth thất bại: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Đổi code OAuth thất bại: {exc}"
+        ) from exc
 
     credentials = flow.credentials
     email = None
@@ -60,21 +84,25 @@ def callback(code: str, state: str, db: Session = Depends(get_db)):
         )
         email = claims.get("email")
 
-    for old in db.scalars(select(GoogleConnection).where(GoogleConnection.is_active.is_(True))):
+    for old in db.scalars(
+        select(GoogleConnection).where(GoogleConnection.is_active.is_(True))
+    ):
         old.is_active = False
 
-    db.add(GoogleConnection(
-        google_email=email,
-        access_token_encrypted=encrypt_text(credentials.token),
-        refresh_token_encrypted=encrypt_text(credentials.refresh_token),
-        token_uri=credentials.token_uri,
-        scopes=" ".join(credentials.scopes or []),
-        token_expiry=(
-            credentials.expiry.replace(tzinfo=timezone.utc)
-            if credentials.expiry and not credentials.expiry.tzinfo
-            else credentials.expiry
-        ),
-        is_active=True,
-    ))
+    db.add(
+        GoogleConnection(
+            google_email=email,
+            access_token_encrypted=encrypt_text(credentials.token),
+            refresh_token_encrypted=encrypt_text(credentials.refresh_token),
+            token_uri=credentials.token_uri,
+            scopes=" ".join(credentials.scopes or []),
+            token_expiry=(
+                credentials.expiry.replace(tzinfo=timezone.utc)
+                if credentials.expiry and not credentials.expiry.tzinfo
+                else credentials.expiry
+            ),
+            is_active=True,
+        )
+    )
     db.commit()
     return RedirectResponse(f"{settings.frontend_url}/settings?google=connected")
